@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>OCRmyPDF WebUI</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- Inline minimal CSS for styling (no external dependencies) -->
+  <style>
+    /* Basic reset */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f8f9fa;
+      padding: 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 0.3em;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    h2 {
+      margin-bottom: 20px;
+    }
+    input[type="file"] {
+      margin-bottom: 10px;
+    }
+    .btn {
+      display: inline-block;
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      font-weight: bold;
+      text-align: center;
+      color: #fff;
+      background-color: #007bff;
+      border: none;
+      border-radius: 0.25rem;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .btn:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
+    .alert {
+      padding: 0.75rem 1.25rem;
+      margin: 1rem 0;
+      border: 1px solid transparent;
+      border-radius: 0.25rem;
+    }
+    .alert-info {
+      color: #055160;
+      background-color: #cff4fc;
+      border-color: #b6effb;
+    }
+    .alert-success {
+      color: #0f5132;
+      background-color: #d1e7dd;
+      border-color: #badbcc;
+    }
+    .alert-danger {
+      color: #842029;
+      background-color: #f8d7da;
+      border-color: #f5c2c7;
+    }
+    .mt-2 {
+      margin-top: 0.5rem;
+    }
+    .mt-3 {
+      margin-top: 1rem;
+    }
+    .mt-5 {
+      margin-top: 3rem;
+    }
+    .mb-4 {
+      margin-bottom: 1.5rem;
+    }
+  </style>
+  
+  <!-- Inline JavaScript -->
+  <script>
+    async function uploadFiles(sessionId) {
+      const files = document.getElementById('fileInput').files;
+      const formData = new FormData();
+      const uploadBtn = document.getElementById('uploadBtn');
+      const status = document.getElementById('status');
+      const resultLink = document.getElementById('resultLink');
+      const processedList = document.getElementById('processedList');
+      const skippedList = document.getElementById('skippedList');
+
+      resultLink.style.display = 'none';
+      processedList.innerHTML = '';
+      skippedList.innerHTML = '';
+      status.innerHTML = '';
+
+      for (let i = 0; i < files.length; i++) {
+          formData.append('files', files[i]);
+      }
+
+      uploadBtn.disabled = true;
+      uploadBtn.innerHTML = 'Processing...';
+      status.innerHTML = '<div class="alert alert-info">Processing files, please wait...</div>';
+
+      try {
+          const response = await fetch(`/upload/${sessionId}`, {
+              method: 'POST',
+              body: formData
+          });
+
+          const result = await response.json();
+
+          if (result.download_url) {
+              status.innerHTML = '<div class="alert alert-success">Processing complete! Download your files below.</div>';
+              resultLink.href = result.download_url;
+              resultLink.style.display = 'block';
+
+              if (result.processed_files && result.processed_files.length > 0) {
+                  processedList.innerHTML = '<strong>Processed Files:</strong><br>' + result.processed_files.join('<br>');
+              }
+              if (result.skipped_files && result.skipped_files.length > 0) {
+                  skippedList.innerHTML = '<strong>Skipped Files (Already Contain Text):</strong><br>' + result.skipped_files.join('<br>');
+              }
+          } else {
+              status.innerHTML = '<div class="alert alert-danger">' + (result.error || 'Unknown error occurred.') + '</div>';
+          }
+      } catch (error) {
+          status.innerHTML = '<div class="alert alert-danger">Error: ' + error.message + '</div>';
+      } finally {
+          uploadBtn.disabled = false;
+          uploadBtn.innerHTML = 'Upload and Process';
+      }
+    }
+  </script>
+</head>
+<body>
+  <div class="container mt-5">
+    <h2 class="mb-4">OCRmyPDF WebUI</h2>
+    <input type="file" id="fileInput" multiple>
+    <button id="uploadBtn" class="btn" onclick="uploadFiles('{{ session_id }}')">Upload and Process</button>
+    <div id="status" class="mt-3"></div>
+    <div id="processedList" class="mt-2"></div>
+    <div id="skippedList" class="mt-2"></div>
+    <a id="resultLink" class="btn mt-3" href="#" style="display:none;">Download Processed Files (ZIP)</a>
+  </div>
+</body>
+</html>

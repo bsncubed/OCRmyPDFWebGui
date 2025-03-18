@@ -1,0 +1,11 @@
+services:
+  webui:
+    build: .
+    ports:
+      - "5000:5000"
+#    volumes:
+#      - ./uploads:/app/uploads
+#      - ./output:/app/output
+    environment:
+      - GUNICORN_TIMEOUT=300
+      - TZ=Australia/Sydney
