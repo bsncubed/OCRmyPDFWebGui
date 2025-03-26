@@ -2,6 +2,7 @@ import os
 import shutil
 import subprocess
 import uuid
+import threading
 from flask import Flask, request, render_template, send_file, jsonify
 from werkzeug.utils import secure_filename
 
@@ -12,7 +13,6 @@ BASE_OUTPUT_FOLDER = 'output'
 os.makedirs(BASE_UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(BASE_OUTPUT_FOLDER, exist_ok=True)
 
-
 def cleanup_session_folders(session_id):
     """Remove any existing session folders to ensure a clean slate."""
     upload_folder = os.path.join(BASE_UPLOAD_FOLDER, session_id)
@@ -22,6 +22,12 @@ def cleanup_session_folders(session_id):
     if os.path.exists(output_folder):
         shutil.rmtree(output_folder)
 
+def schedule_cleanup(session_id, delay=900):
+    """
+    Schedule the cleanup of a session folder after a specified delay (default: 900 seconds = 15 minutes).
+    """
+    timer = threading.Timer(delay, lambda: cleanup_session_folders(session_id))
+    timer.start()
 
 def create_session_folders(session_id):
     """
@@ -34,7 +40,6 @@ def create_session_folders(session_id):
     os.makedirs(upload_folder, exist_ok=True)
     os.makedirs(output_folder, exist_ok=True)
     return upload_folder, output_folder
-
 
 def run_ocrmypdf(input_pdf, output_pdf):
     cmd = [
@@ -53,13 +58,11 @@ def run_ocrmypdf(input_pdf, output_pdf):
         else:
             raise RuntimeError(f"OCRmyPDF failed: {result.stderr}")
 
-
 @app.route('/')
 def index():
     # Generate a new session id for each visitor.
     session_id = str(uuid.uuid4())
     return render_template('index.html', session_id=session_id)
-
 
 @app.route('/upload/<session_id>', methods=['POST'])
 def upload_files(session_id):
@@ -94,6 +97,7 @@ def upload_files(session_id):
             return jsonify({'error': f"Failed to process {filename}: {str(e)}"}), 500
 
     if not processed_files:
+        schedule_cleanup(session_id)
         return jsonify({
             'error': 'All files were skipped because they already contain selectable text.',
             'skipped_files': skipped_files
@@ -103,12 +107,14 @@ def upload_files(session_id):
     zip_filename = os.path.join(output_folder, 'processed_files.zip')
     subprocess.run(['zip', '-j', zip_filename] + [os.path.join(output_folder, f) for f in processed_files])
 
+    # Schedule deletion of the session folders after 15 minutes.
+    schedule_cleanup(session_id)
+
     return jsonify({
         'download_url': f'/download/{session_id}/processed_files.zip',
         'processed_files': processed_files,
         'skipped_files': skipped_files
     })
-
 
 @app.route('/download/<session_id>/<filename>')
 def download_file(session_id, filename):
