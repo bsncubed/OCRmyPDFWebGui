@@ -7,12 +7,24 @@ from flask import Flask, request, render_template, send_file, jsonify
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-
+# Max upload size: 25 MB
+app.config['MAX_CONTENT_LENGTH'] = 25 * 1024 * 1024
 BASE_UPLOAD_FOLDER = 'uploads'
 BASE_OUTPUT_FOLDER = 'output'
 os.makedirs(BASE_UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(BASE_OUTPUT_FOLDER, exist_ok=True)
+ALLOWED_EXTENSIONS = {'pdf'}
 
+def allowed_file(filename):
+    return (
+        '.' in filename and
+        filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    )
+from werkzeug.exceptions import RequestEntityTooLarge
+@app.errorhandler(RequestEntityTooLarge)
+def handle_file_too_large(e):
+    return jsonify({'error': 'File too large. Max is 25 MB.'}), 413
+    
 def cleanup_session_folders(session_id):
     """Remove any existing session folders to ensure a clean slate."""
     upload_folder = os.path.join(BASE_UPLOAD_FOLDER, session_id)
@@ -83,6 +95,22 @@ def upload_files(session_id):
         filename = secure_filename(file.filename)
         input_path = os.path.join(upload_folder, filename)
         output_path = os.path.join(output_folder, filename)
+for file in files:
+    if file.filename == '':
+        continue
+
+    if not allowed_file(file.filename):
+        return jsonify({
+            'error': f"Invalid file type: {file.filename}. Only PDF allowed."
+        }), 400
+
+    # Optionally also check MIME type:
+    if file.mimetype not in ('application/pdf',):
+        return jsonify({
+            'error': f"Invalid MIME type for {file.filename}: {file.mimetype}"
+        }), 400
+
+    # … now save & process …
 
         file.save(input_path)
 
